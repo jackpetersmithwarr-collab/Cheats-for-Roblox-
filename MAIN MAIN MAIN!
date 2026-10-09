@@ -1,4 +1,4 @@
-local Library = loadstring(game:HttpGet("https://githubusercontent.com"))()
+local Library = loadstring(game:HttpGet("https://raw.githubusercontent.com/xHeptc/Kavo-UI-Library/main/source.lua"))()
 local Window = Library.CreateLib("ULTRA CHEAT GUI! BY GREEN DEPTH", "Ocean")
 
 -- Services & Players
@@ -9,78 +9,76 @@ local runService = game:GetService("RunService")
 
 -- Script States
 local targetSpeed = 16 
+local targetJump = 50
+local targetSize = 1
 local flying = false
 local flySpeed = 50
 local Keys = {a = false, d = false, w = false, s = false}
-local flyConnection
 
--- Persistent WalkSpeed Loop (Locks speed to slider value)
-task.spawn(function()
-    while true do
-        task.wait(0.1)
-        if LocalPlayer.Character and not flying then
-            local Humanoid = LocalPlayer.Character:FindFirstChildOfClass("Humanoid")
-            if Humanoid and Humanoid.WalkSpeed ~= targetSpeed then
-                Humanoid.WalkSpeed = targetSpeed
-            end
+-- Dynamic Scaling and Automatic Floor/Hip Calibration
+local function scaleCharacter(character, scale)
+    if not character then return end
+    local humanoid = character:FindFirstChildOfClass("Humanoid")
+    if not humanoid then return end
+    
+    -- Update standard R15 scale values natively
+    local scales = {"BodyHeightScale", "BodyWidthScale", "BodyDepthScale", "HeadScale"}
+    for _, name in ipairs(scales) do
+        local val = humanoid:FindFirstChild(name)
+        if val and val:IsA("NumberValue") then
+            val.Value = scale
         end
+    end
+    
+    -- Adjust HipHeight automatically based on scale factor so you never clip or get stuck
+    humanoid.HipHeight = 1.35 * scale
+end
+
+-- Streamlined Property Monitor (No heavy math, pure values)
+runService.Heartbeat:Connect(function()
+    local character = LocalPlayer.Character
+    if not character then return end
+    
+    local humanoid = character:FindFirstChildOfClass("Humanoid")
+    if humanoid then
+        -- Direct assignment bypasses internal mass barriers
+        humanoid.WalkSpeed = targetSpeed
+        humanoid.JumpPower = targetJump
+        humanoid.UseJumpPower = true
     end
 end)
 
--- Modern Physics Flight Function
-local function toggleFlight(state)
-    local Character = LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait()
-    local Humanoid = Character:WaitForChild("Humanoid")
-    local RootPart = Character:FindFirstChild("HumanoidRootPart")
+-- Absolute Positional Flight Engine (Ignores all game physics, masses, and blocks)
+runService.RenderStepped:Connect(function()
+    if not flying then return end
     
-    if not RootPart then return end
+    local character = LocalPlayer.Character
+    if not character then return end
     
-    if RootPart:FindFirstChild("FlyVelocity") then RootPart.FlyVelocity:Destroy() end
-    if RootPart:FindFirstChild("FlyAttachment") then RootPart.FlyAttachment:Destroy() end
-    if flyConnection then flyConnection:Disconnect() end
+    local root = character:FindFirstChild("HumanoidRootPart")
+    local humanoid = character:FindFirstChildOfClass("Humanoid")
+    if not root or not humanoid then return end
     
-    if not state then
-        Humanoid.PlatformStand = false
-        RootPart.Velocity = Vector3.new(0,0,0)
-        return
+    local camera = workspace.CurrentCamera
+    local moveDirection = Vector3.new(0, 0, 0)
+    
+    -- Detect directions
+    if Keys.w then moveDirection = moveDirection + camera.CFrame.LookVector end
+    if Keys.s then moveDirection = moveDirection - camera.CFrame.LookVector end
+    if Keys.a then moveDirection = moveDirection - camera.CFrame.RightVector end
+    if Keys.d then moveDirection = moveDirection + camera.CFrame.RightVector end
+    
+    -- Zero out actual movement drops so your character stays level
+    root.AssemblyLinearVelocity = Vector3.new(0, 0, 0)
+    root.AssemblyAngularVelocity = Vector3.new(0, 0, 0)
+    
+    -- Teleport the CFrame cleanly frame-by-frame based on the speed slider
+    if moveDirection.Magnitude > 0 then
+        root.CFrame = CFrame.new(root.Position + (moveDirection.Unit * (flySpeed / 10)), root.Position + camera.CFrame.LookVector)
+    else
+        root.CFrame = CFrame.new(root.Position, root.Position + camera.CFrame.LookVector)
     end
-    
-    Humanoid.PlatformStand = true
-    
-    local attachment = Instance.new("Attachment")
-    attachment.Name = "FlyAttachment"
-    attachment.Parent = RootPart
-    
-    local linearVelocity = Instance.new("LinearVelocity")
-    linearVelocity.Name = "FlyVelocity"
-    linearVelocity.Attachment0 = attachment
-    linearVelocity.MaxForce = math.huge
-    linearVelocity.Velocity = Vector3.new(0, 0, 0)
-    linearVelocity.Parent = RootPart
-    
-    flyConnection = runService.RenderStepped:Connect(function()
-        if not flying or not RootPart or not RootPart.Parent then
-            toggleFlight(false)
-            return
-        end
-        
-        local camCFrame = workspace.CurrentCamera.CFrame
-        local moveDirection = Vector3.new()
-        
-        if Keys.w then moveDirection = moveDirection + camCFrame.LookVector end
-        if Keys.s then moveDirection = moveDirection - camCFrame.LookVector end
-        if Keys.a then moveDirection = moveDirection - camCFrame.RightVector end
-        if Keys.d then moveDirection = moveDirection + camCFrame.RightVector end
-        
-        if moveDirection.Magnitude > 0 then
-            linearVelocity.Velocity = moveDirection.Unit * flySpeed
-        else
-            linearVelocity.Velocity = Vector3.new(0, 0, 0)
-        end
-        
-        RootPart.CFrame = CFrame.new(RootPart.Position, RootPart.Position + camCFrame.LookVector)
-    end)
-end
+end)
 
 -- Keybind Input Tracking
 uis.InputBegan:Connect(function(input, gpe)
@@ -103,21 +101,44 @@ local MainTab = Window:NewTab("Main")
 local MainSection = MainTab:NewSection("Player Exploits")
 
 -- WalkSpeed Slider
-MainSection:NewSlider("WalkSpeed", "Adjust your character's movement speed", 250, 16, function(s)
-    targetSpeed = s
-    if LocalPlayer.Character then
-        local Humanoid = LocalPlayer.Character:FindFirstChildOfClass("Humanoid")
-        if Humanoid then Humanoid.WalkSpeed = targetSpeed end
-    end
+MainSection:NewSlider("WalkSpeed", "Adjust character movement speed", 250, 16, function(s)
+    targetSpeed = tonumber(s) or 16
 end)
 
--- Fly Toggle Button
-MainSection:NewButton("Toggle Fly", "Enables or disables modern flying mode", function()
+-- JumpPower Slider
+MainSection:NewSlider("JumpPower", "Adjust character jump height", 500, 50, function(j)
+    targetJump = tonumber(j) or 50
+end)
+
+-- Character Height Scaler
+MainSection:NewSlider("Character Scale", "Change R15 body dimensions (1 = Normal)", 15, 1, function(scale)
+    targetSize = tonumber(scale) or 1
+    scaleCharacter(LocalPlayer.Character, targetSize)
+end)
+
+-- Fly Speed Slider
+MainSection:NewSlider("Fly Speed", "Adjust flight acceleration speed", 300, 10, function(f)
+    flySpeed = tonumber(f) or 50
+end)
+
+-- Re-apply size alterations when spawning in
+LocalPlayer.CharacterAdded:Connect(function(char)
+    task.wait(0.5)
+    scaleCharacter(char, targetSize)
+end)
+
+-- Flight Toggle
+MainSection:NewButton("Toggle Fly", "Enables or disables absolute flight mode", function()
     flying = not flying
-    toggleFlight(flying)
-    
-    if not flying and LocalPlayer.Character then
-        local Humanoid = LocalPlayer.Character:FindFirstChildOfClass("Humanoid")
-        if Humanoid then Humanoid.WalkSpeed = targetSpeed end
+    local character = LocalPlayer.Character
+    if character then
+        local humanoid = character:FindFirstChildOfClass("Humanoid")
+        if humanoid then
+            if flying then
+                humanoid:ChangeState(Enum.HumanoidStateType.Physics)
+            else
+                humanoid:ChangeState(Enum.HumanoidStateType.GettingUp)
+            end
+        end
     end
 end)
