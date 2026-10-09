@@ -1,0 +1,123 @@
+local Library = loadstring(game:HttpGet("https://githubusercontent.com"))()
+local Window = Library.CreateLib("ULTRA CHEAT GUI! BY GREEN DEPTH", "Ocean")
+
+-- Services & Players
+local Players = game:GetService("Players")
+local LocalPlayer = Players.LocalPlayer
+local uis = game:GetService("UserInputService")
+local runService = game:GetService("RunService")
+
+-- Script States
+local targetSpeed = 16 
+local flying = false
+local flySpeed = 50
+local Keys = {a = false, d = false, w = false, s = false}
+local flyConnection
+
+-- Persistent WalkSpeed Loop (Locks speed to slider value)
+task.spawn(function()
+    while true do
+        task.wait(0.1)
+        if LocalPlayer.Character and not flying then
+            local Humanoid = LocalPlayer.Character:FindFirstChildOfClass("Humanoid")
+            if Humanoid and Humanoid.WalkSpeed ~= targetSpeed then
+                Humanoid.WalkSpeed = targetSpeed
+            end
+        end
+    end
+end)
+
+-- Modern Physics Flight Function
+local function toggleFlight(state)
+    local Character = LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait()
+    local Humanoid = Character:WaitForChild("Humanoid")
+    local RootPart = Character:FindFirstChild("HumanoidRootPart")
+    
+    if not RootPart then return end
+    
+    if RootPart:FindFirstChild("FlyVelocity") then RootPart.FlyVelocity:Destroy() end
+    if RootPart:FindFirstChild("FlyAttachment") then RootPart.FlyAttachment:Destroy() end
+    if flyConnection then flyConnection:Disconnect() end
+    
+    if not state then
+        Humanoid.PlatformStand = false
+        RootPart.Velocity = Vector3.new(0,0,0)
+        return
+    end
+    
+    Humanoid.PlatformStand = true
+    
+    local attachment = Instance.new("Attachment")
+    attachment.Name = "FlyAttachment"
+    attachment.Parent = RootPart
+    
+    local linearVelocity = Instance.new("LinearVelocity")
+    linearVelocity.Name = "FlyVelocity"
+    linearVelocity.Attachment0 = attachment
+    linearVelocity.MaxForce = math.huge
+    linearVelocity.Velocity = Vector3.new(0, 0, 0)
+    linearVelocity.Parent = RootPart
+    
+    flyConnection = runService.RenderStepped:Connect(function()
+        if not flying or not RootPart or not RootPart.Parent then
+            toggleFlight(false)
+            return
+        end
+        
+        local camCFrame = workspace.CurrentCamera.CFrame
+        local moveDirection = Vector3.new()
+        
+        if Keys.w then moveDirection = moveDirection + camCFrame.LookVector end
+        if Keys.s then moveDirection = moveDirection - camCFrame.LookVector end
+        if Keys.a then moveDirection = moveDirection - camCFrame.RightVector end
+        if Keys.d then moveDirection = moveDirection + camCFrame.RightVector end
+        
+        if moveDirection.Magnitude > 0 then
+            linearVelocity.Velocity = moveDirection.Unit * flySpeed
+        else
+            linearVelocity.Velocity = Vector3.new(0, 0, 0)
+        end
+        
+        RootPart.CFrame = CFrame.new(RootPart.Position, RootPart.Position + camCFrame.LookVector)
+    end)
+end
+
+-- Keybind Input Tracking
+uis.InputBegan:Connect(function(input, gpe)
+    if gpe then return end
+    if input.KeyCode == Enum.KeyCode.W then Keys.w = true
+    elseif input.KeyCode == Enum.KeyCode.S then Keys.s = true
+    elseif input.KeyCode == Enum.KeyCode.A then Keys.a = true
+    elseif input.KeyCode == Enum.KeyCode.D then Keys.d = true end
+end)
+
+uis.InputEnded:Connect(function(input)
+    if input.KeyCode == Enum.KeyCode.W then Keys.w = false
+    elseif input.KeyCode == Enum.KeyCode.S then Keys.s = false
+    elseif input.KeyCode == Enum.KeyCode.A then Keys.a = false
+    elseif input.KeyCode == Enum.KeyCode.D then Keys.d = false end
+end)
+
+-- UI Structure
+local MainTab = Window:NewTab("Main")
+local MainSection = MainTab:NewSection("Player Exploits")
+
+-- WalkSpeed Slider
+MainSection:NewSlider("WalkSpeed", "Adjust your character's movement speed", 250, 16, function(s)
+    targetSpeed = s
+    if LocalPlayer.Character then
+        local Humanoid = LocalPlayer.Character:FindFirstChildOfClass("Humanoid")
+        if Humanoid then Humanoid.WalkSpeed = targetSpeed end
+    end
+end)
+
+-- Fly Toggle Button
+MainSection:NewButton("Toggle Fly", "Enables or disables modern flying mode", function()
+    flying = not flying
+    toggleFlight(flying)
+    
+    if not flying and LocalPlayer.Character then
+        local Humanoid = LocalPlayer.Character:FindFirstChildOfClass("Humanoid")
+        if Humanoid then Humanoid.WalkSpeed = targetSpeed end
+    end
+end)
